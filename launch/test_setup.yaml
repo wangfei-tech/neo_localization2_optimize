@@ -2,78 +2,109 @@ neo_localization2_node:
   ros__parameters:
     # exponential low pass gain for localization update (0 to 1)
     #   (higher gain means odometry is less used / relied on)
+    # 用于定位更新的指数低通增益（0 到 1）
+    #（增益越高，里程计的使用/依赖程度越低）
     update_gain: 0.5
 
     # time based confidence gain when in 2D / 1D mode
+    # 在 2D/1D 模式下基于时间的置信度增益
     confidence_gain: 0.01
 
     # how many particles (samples) to spread (per update)
+    # 每次更新需要传播多少个粒子（样本）
     sample_rate: 10
 
     # localization update rate [1/s]
+    # 定位更新速率 [1/s]
     loc_update_rate: 10
 
     # map tile update rate [1/s]
+    # 地图图块更新率 [1/s]
     map_update_rate: 0.5
 
     # map tile size in pixels
+    # 地图图块大小（以像素为单位）
     map_size: 1000
 
     # how often to downscale (half) the original map
+    # 多久缩小（一半）原始地图一次
     map_downscale: 0
 
     # how many 3x3 gaussian smoothing iterations are applied to the map
+    # # 对地图应用了多少次 3x3 高斯平滑迭代
     num_smooth: 5
 
     # minimum score for valid localization (otherwise 0D mode)
     #    higher values make it go into 0D mode earlier
+    # 有效定位的最低分数（否则为 0D 模式）
+    # 值越高，越早进入 0D 模式
     min_score: 0.2
 
     # odometry error in x and y [m/m] [1]
     #    how fast to increase particle spread when in 1D / 0D mode
+    # x 和 y 轴上的里程计误差 [m/m] [1]
+    # 在 1D / 0D 模式下，粒子扩散的增加​​速度
     odometry_std_xy: 0.01
 
     # odometry error in yaw angle [rad/rad] [1]
     #    how fast to increase particle spread when in 0D mode
+    # 偏航角里程计误差 [rad/rad] [1]
+    # 零维模式下粒子扩散的增加​​速度
     odometry_std_yaw: 0.01
 
     # minimum particle spread in x and y [m]
+    # x 和 y 方向上的最小粒子扩散[m]
     min_sample_std_xy: 0.025
 
     # minimum particle spread in yaw angle [rad]
+    # 偏航角的最小粒子扩散 [rad]
     min_sample_std_yaw: 0.025
 
     # initial/maximum particle spread in x and y [m]
+    # 初始/最大粒子扩散在 x 和 y 方向 [m]
     max_sample_std_xy: 0.5
 
     # initial/maximum particle spread in yaw angle [rad]
+    # 初始/最大粒子扩散在偏航角 [rad]
     max_sample_std_yaw: 0.5
 
     # threshold for 1D / 2D position decision making (minimum average second order gradient)
     #   if worst gradient direction is below this value we go into 1D mode
     #   if both gradient directions are below we may go into 0D mode, depending on disable_threshold
     #   higher values will make it go into 1D / 0D mode earlier
+    # 1D/2D 位置决策阈值（最小平均二阶梯度）
+    # 如果最差梯度方向低于此值，则进入 1D 模式
+    # 如果两个梯度方向都低于此值，则可能进入 0D 模式，具体取决于 disable_threshold
+    # 值越高，越早进入 1D/0D 模式
     constrain_threshold: 0.1
 
     # threshold for 1D / 2D decision making (with or without orientation)
     #   higher values will make it go into 1D mode earlier
+    # 一维/二维决策阈值（有或无方向性）
+    # 值越高，越早进入一维模式
     constrain_threshold_yaw: 0.2
 
     # minimum number of points per update
+    # 每次更新的最小点数
     min_points: 20
 
     # solver update gain, lower gain = more stability / slower convergence
+    # # 求解器更新增益，增益越低 = 稳定性越高 / 收敛速度越慢
     solver_gain: 0.1
 
     # solver update damping, higher damping = more stability / slower convergence
+    # 求解器更新阻尼，阻尼越高 = 稳定性越高 / 收敛速度越慢
     solver_damping: 1000.0
 
     # number of gauss-newton iterations per sample per scan
+    # # 每次扫描每个样本的高斯-牛顿迭代次数
     solver_iterations: 20
 
     # maximum wait for getting transforms [s]
+    # 获取变换的最大等待时间 [s]
     transform_timeout: 0.2
 
     # if to broadcast map frame
+    # 是否广播地图框架tf 发布
     broadcast_tf: true
 

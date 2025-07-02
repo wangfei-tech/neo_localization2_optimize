@@ -4,6 +4,10 @@
  *  Created on: Apr 8, 2020
  *      Author: mad
  */
+/***
+ * 
+ * modify by wfly on Jul 1, 2025
+*/
 #include <neo_localization/Util.h>
 #include <neo_localization/Convert.h>
 #include <neo_localization/Solver.h>
@@ -156,7 +160,7 @@ public:
     this->declare_parameter<bool>("broadcast_info", false);
     this->get_parameter("broadcast_info", m_broadcast_info);
 
-    m_map_update_thread = std::thread(&NeoLocalizationNode::update_loop, this);
+    m_map_update_thread = std::thread(&NeoLocalizationNode::update_loop, this);//异步地图更新循环，在单独的线程中运行。
 
     m_tf_broadcaster = std::make_shared<tf2_ros::TransformBroadcaster>(this);
 
@@ -190,6 +194,7 @@ public:
   ~NeoLocalizationNode()
   {
     if(m_map_update_thread.joinable()) {
+      m_map_update_thread.join(); // wait for map update thread to finish
     }
   }
 
@@ -586,15 +591,15 @@ protected:
       tf2::Stamped<tf2::Transform> base_to_odom;
       try {
         auto tempTransform = buffer->lookupTransform(m_odom_frame, m_base_frame, tf2::TimePointZero);
-        tf2::fromMsg(tempTransform, base_to_odom);
+        tf2::fromMsg(tempTransform, base_to_odom);//获取从base_frame到odom_frame的变换 odom 的相对位移
       } catch(const std::exception& ex) {
         RCLCPP_WARN_STREAM(this->get_logger(),"NeoLocalizationNode: lookupTransform(m_base_frame, m_odom_frame) failed: " << ex.what());
         return;
       }
 
       const Matrix<double, 4, 4> L = convert_transform_25(base_to_odom);
-      const Matrix<double, 4, 4> T = translate25(m_offset_x, m_offset_y) * rotate25_z(m_offset_yaw);    // odom to map
-      world_pose = (m_world_to_map.inverse() * T * L * Matrix<double, 4, 1>{0, 0, 0, 1}).project();
+      const Matrix<double, 4, 4> T = translate25(m_offset_x, m_offset_y) * rotate25_z(m_offset_yaw);    // odom to map 之间的变换
+      world_pose = (m_world_to_map.inverse() * T * L * Matrix<double, 4, 1>{0, 0, 0, 1}).project();  // base坐标系下的原点到世界坐标系的变换
 
       world = m_world;
       world_to_map = m_world_to_map;
@@ -608,6 +613,7 @@ protected:
     auto map = std::make_shared<GridMap<float>>(m_map_size, m_map_size, world_scale);
 
     // extract tile and convert to our format (occupancy between 0 and 1)
+    // 栅格地图中对未知定义为 -1，0表示空闲 1-100表示占据的概率 100表示占用
     for(int y = 0; y < map->size_y(); ++y) {
       for(int x = 0; x < map->size_x(); ++x) {
         const int x_ = std::min(std::max(tile_x + x, 0), int(world->info.width) - 1);

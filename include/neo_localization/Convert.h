@@ -35,10 +35,10 @@ SOFTWARE.
 #include <nav_msgs/msg/occupancy_grid.hpp>
 
 /*
- * Converts ROS 3D Transform to a 2.5D matrix.
+ * Converts ROS 3D Transform to a 2.5D matrix. 2.5D可以理解为x,y,yaw
  */
 inline
-Matrix<double, 4, 4> convert_transform_25(const tf2::Transform& trans)
+Matrix<double, 4, 4> convert_transform_25(const tf2::Transform& trans)//4×4线性变换矩阵T
 {
   Matrix<double, 4, 4> res;
   res(0, 0) = trans.getBasis()[0][0];
