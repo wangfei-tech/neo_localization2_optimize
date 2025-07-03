@@ -202,6 +202,7 @@ protected:
 
   /*
    * Computes localization update for a single laser scan.
+   * 计算单次激光扫描的定位更新。
    */
   void scan_callback(const sensor_msgs::msg::LaserScan::SharedPtr scan)
   {
@@ -243,7 +244,7 @@ protected:
       return points;
     }
     
-    const Matrix<double, 4, 4> S = convert_transform_3(sensor_to_base);
+    const Matrix<double, 4, 4> S = convert_transform_3(sensor_to_base);//传感器在base坐标系下的变换矩阵 这里用 3D变换 考虑x y z roll pitch yaw
     const Matrix<double, 4, 4> L = convert_transform_25(base_to_odom);
 
     // precompute transformation matrix from sensor to requested base
@@ -319,11 +320,11 @@ protected:
 
     const Matrix<double, 3, 1> grid_pose = (m_grid_to_map.inverse() * T * L * Matrix<double, 4, 1>{0, 0, 0, 1}).project();
     // setup distributions
-    std::normal_distribution<double> dist_x(grid_pose[0], m_sample_std_xy);
+    std::normal_distribution<double> dist_x(grid_pose[0], m_sample_std_xy);//m_sample_std_xy 高斯分布的标准差
     std::normal_distribution<double> dist_y(grid_pose[1], m_sample_std_xy);
     std::normal_distribution<double> dist_yaw(grid_pose[2], m_sample_std_yaw);
 
-    // solve odometry prediction first
+    // solve odometry prediction first 里程计预测
     m_solver.pose_x = grid_pose[0];
     m_solver.pose_y = grid_pose[1];
     m_solver.pose_yaw = grid_pose[2];
@@ -393,7 +394,7 @@ protected:
 
     // compute gradient characteristic
     std::array<Matrix<double, 2, 1>, 2> grad_eigen_vectors;
-    const Matrix<double, 2, 1> grad_eigen_values = compute_eigenvectors_2(grad_var_xyw.get<2, 2>(), grad_eigen_vectors);
+    const Matrix<double, 2, 1> grad_eigen_values = compute_eigenvectors_2(grad_var_xyw.get<2, 2>(), grad_eigen_vectors);//计算协方差矩阵的特征值和特征向量
     const Matrix<double, 3, 1> grad_std_uvw{sqrt(grad_eigen_values[0]), sqrt(grad_eigen_values[1]), sqrt(grad_var_xyw(2, 2))};
 
     // decide if we have 3D, 2D, 1D or 0D localization
@@ -517,7 +518,7 @@ protected:
 
       tf2::Stamped<tf2::Transform> base_to_odom;
       tf2::Transform map_pose;
-      tf2::fromMsg(pose->pose.pose, map_pose);
+      tf2::fromMsg(pose->pose.pose, map_pose);//机器人在map坐标系下的位姿
 
       RCLCPP_INFO_STREAM(this->get_logger(), "NeoLocalizationNode: Got new map pose estimate: x=" << map_pose.getOrigin()[0]
               << " m, y=" <<  map_pose.getOrigin()[1] );
@@ -534,7 +535,7 @@ protected:
 
       // compute new odom to map offset
       const Matrix<double, 3, 1> new_offset =
-          (convert_transform_25(map_pose) * L.inverse() * Matrix<double, 4, 1>{0, 0, 0, 1}).project();
+          (convert_transform_25(map_pose) * L.inverse() * Matrix<double, 4, 1>{0, 0, 0, 1}).project();//
 
       // set new offset based on given position
       m_offset_x = new_offset[0];
@@ -554,6 +555,7 @@ protected:
 
   /*
    * Stores the given map.
+   * 保存给定的地图。
    */
   void map_callback(const nav_msgs::msg::OccupancyGrid::SharedPtr ros_map)
   {
@@ -565,7 +567,7 @@ protected:
 
     {
       tf2::Transform tmp;
-      tf2::fromMsg(ros_map->info.origin, tmp);
+      tf2::fromMsg(ros_map->info.origin, tmp);//获取地图原点的变换 地图左下角对应的世界坐标
       m_world_to_map = convert_transform_25(tmp);
     }
     m_world = ros_map;

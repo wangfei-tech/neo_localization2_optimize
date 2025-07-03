@@ -236,6 +236,11 @@ public:
    * Computes gauss-filtered and bilinear-interpolated second-order x and y gradient
    * at given pixel position.
    */
+  /*
+* 计算高斯滤波和双线性插值的二阶 x 和 y 梯度
+* 在给定像素位置。
+*/
+//计算二阶梯度是为了估计当前匹配区域的可靠性（信息量），从而提升定位系统对不确定性的建模精度和稳定性。
   void calc_gradient2(float x, float y, float& ddx, float& ddy) const
   {
     static const float coeff_33_ddxy[3][3] = {
@@ -247,7 +252,7 @@ public:
     const int x0 = x;
     const int y0 = y;
 
-    const float a = x - floorf(x);
+    const float a = x - floorf(x);//不大于x的最大整数
     const float b = y - floorf(y);
 
     ddx = 0;

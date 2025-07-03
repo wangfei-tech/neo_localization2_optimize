@@ -184,6 +184,11 @@ protected:
  * A higher covariance means a larger gradient, so the meaning of "covariance" is inverted here.
  * A higher gradient is better for localization accuracy.
  */
+/*
+* 基于二阶梯度计算“虚拟”协方差矩阵。
+* 协方差越大，梯度越大，因此这里“协方差”的含义颠倒了。
+* 梯度越大，定位精度越高。
+*/
 inline
 Matrix<double, 3, 3> compute_virtual_scan_covariance_xyw( std::shared_ptr<const GridMap<float>> grid,
                               const std::vector<scan_point_t>& points,
