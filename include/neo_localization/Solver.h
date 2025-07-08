@@ -57,24 +57,26 @@ public:
   Matrix<double, 3, 1> G;       // gradient vector
   Matrix<double, 3, 3> H;       // Hessian matrix
 
+  //通过激光点云在栅格地图上的匹配误差，计算用于优化的梯度和 Hessian（海森）矩阵，用于后续姿态估计优化
   template<typename T>
   void solve( const GridMap<T>& grid,
         const std::vector<scan_point_t>& points)
   {
-    reset();
+    reset();// 重置梯度和Hessian矩阵
 
     // compute transformation matrix first
+    // 激光雷达坐标系到栅格地图坐标系的变换矩阵
     const Matrix<double, 3, 3> P = transform2(pose_x, pose_y, pose_yaw);
 
     for(const auto& point : points)
     {
       // transform sensor point to grid coordinates
-      const auto q = (P * Matrix<double, 3, 1>{point.x, point.y, 1}).project();
-      const float grid_x = grid.world_to_grid(q[0]);
-      const float grid_y = grid.world_to_grid(q[1]);
+      const auto q = (P * Matrix<double, 3, 1>{point.x, point.y, 1}).project();//map坐标系下的激光点云坐标
+      const float grid_x = grid.world_to_grid(q[0]);// 将激光点云坐标转换为栅格地图坐标
+      const float grid_y = grid.world_to_grid(q[1]);// 将激光点云坐标转换为栅格地图坐标
 
       // compute error based on grid
-      const float r_i = grid.bilinear_lookup(grid_x, grid_y);
+      const float r_i = grid.bilinear_lookup(grid_x, grid_y); //对应点在栅格地图上的误差 双线性插值
       r_norm += r_i * r_i;
 
       // compute error gradient based on grid
@@ -171,6 +173,7 @@ protected:
     const auto X = H.inverse() * G;
 
     // apply new solution with a gain (optimize max. r_norm)
+    // // 使用增益应用优化步长，目标是最大化地图匹配度（r_i）
     pose_x += gain * X[0];
     pose_y += gain * X[1];
     pose_yaw += gain * X[2];

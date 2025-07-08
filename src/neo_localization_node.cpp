@@ -437,6 +437,7 @@ protected:
           (m_grid_to_map * grid_pose_new * L.inverse() * Matrix<double, 4, 1>{0, 0, 0, 1}).project();
 
       // apply new offset with an exponential low pass filter
+      // 低通滤波在这里的作用是“让偏移值逐渐趋近于新值”，而不是直接跳变，从而达到平滑的效果。
       m_offset_x += (new_offset[0] - m_offset_x) * m_update_gain;
       m_offset_y += (new_offset[1] - m_offset_y) * m_update_gain;
       m_offset_yaw += angles::shortest_angular_distance(m_offset_yaw, new_offset[2]) * m_update_gain;

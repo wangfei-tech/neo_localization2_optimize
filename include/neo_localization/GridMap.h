@@ -243,6 +243,7 @@ public:
 //计算二阶梯度是为了估计当前匹配区域的可靠性（信息量），从而提升定位系统对不确定性的建模精度和稳定性。
   void calc_gradient2(float x, float y, float& ddx, float& ddy) const
   {
+    //水平和垂直方向的二阶梯度系数
     static const float coeff_33_ddxy[3][3] = {
         {0.069752, -0.139504, 0.069752},
         {0.110494, -0.220989, 0.110494},

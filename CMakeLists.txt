@@ -12,6 +12,7 @@ find_package(tf2_geometry_msgs REQUIRED)
 find_package(ament_cmake REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(angles REQUIRED)
+find_package(Ceres REQUIRED)
 
 
 set(CMAKE_CXX_STANDARD 17)
@@ -38,17 +39,22 @@ set(dependencies
   tf2_eigen
   sensor_msgs
   nav_msgs
+  Ceres
 )
 
 
 set(library_name neo_localization_node)
 
-add_executable(${library_name} src/neo_localization_node.cpp)
+add_executable(${library_name} src/neo_localization_node.cpp
+                               src/ceres_solver.cpp)
 
 ament_target_dependencies(${library_name}
   ${dependencies}
+  Ceres
 )
-
+target_link_libraries(${library_name}
+  ${CERES_LIBRARIES}
+)
 ament_export_include_directories(include)
 ament_export_libraries(${library_name})
 ament_export_dependencies(${dependencies})
