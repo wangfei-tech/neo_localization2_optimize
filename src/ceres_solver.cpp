@@ -31,27 +31,30 @@ namespace
 {
   // 基础残差（单层）
   // 在优化中，根据当前的位姿 pose，把激光点 p 转到地图上，对应插值得到的 地图值（map_val）作为残差 residual。
+  template <typename T>
   struct ScanResidual
   {
-    scan_point_t p;                             // 单个激光点
-    std::shared_ptr<const GridMap<float>> grid; // 栅格地图
+    scan_point_t p;
+    std::shared_ptr<const GridMap<float>> grid;
 
     ScanResidual(scan_point_t point, std::shared_ptr<const GridMap<float>> g)
         : p(point), grid(std::move(g)) {}
-    template <typename T>
-    bool operator()(const T *const pose, T *residual) const
+
+    template <typename U>
+    bool operator()(const U *const pose, U *residual) const
     {
-      T cos_yaw = ceres::cos(pose[2]);
-      T sin_yaw = ceres::sin(pose[2]);
+      U cos_yaw = ceres::cos(pose[2]);
+      U sin_yaw = ceres::sin(pose[2]);
 
-      T wx = pose[0] + cos_yaw * T(p.x) - sin_yaw * T(p.y);
-      T wy = pose[1] + sin_yaw * T(p.x) + cos_yaw * T(p.y);
+      U wx = pose[0] + cos_yaw * U(p.x) - sin_yaw * U(p.y);
+      U wy = pose[1] + sin_yaw * U(p.x) + cos_yaw * U(p.y);
 
-      float gx = grid->world_to_grid(getScalar(wx));
-      float gy = grid->world_to_grid(getScalar(wy));
-      float map_val = grid->bilinear_lookup(gx, gy);
+      U gx = grid->world_to_grid_T(wx);
+      U gy = grid->world_to_grid_T(wy);
 
-      residual[0] = T(-map_val);
+      U map_val = grid->bilinear_lookup_T(gx, gy);
+
+      residual[0] = -map_val;
       return true;
     }
   };
@@ -99,13 +102,14 @@ void CeresScanMatcher::solve(
 {
   double pose[3] = { pose_x, pose_y, pose_yaw };
   ceres::Problem problem;
+  auto map_val_sum = std::make_shared<double>(0.0);
 
-  for (const auto& pt : points) {
-    CostFunction* cost_function =
-      new AutoDiffCostFunction<ScanResidual, 1, 3>(new ScanResidual(pt, grid));
+  for (const auto& pt : points) 
+  {
+    ceres::CostFunction *cost_function =
+        new ceres::AutoDiffCostFunction<ScanResidual<float>, 1, 3>(new ScanResidual<float>(pt, grid));
     problem.AddResidualBlock(cost_function, nullptr, pose);
   }
-
   ceres::Solver::Options options;
   options.max_num_iterations = 20;
   options.linear_solver_type = ceres::DENSE_QR;
@@ -113,10 +117,11 @@ void CeresScanMatcher::solve(
 
   ceres::Solver::Summary summary;
   ceres::Solve(options, &problem, &summary);
+  std::cout<< "CeresScanMatcher Summary: " << summary.FullReport() << std::endl;
   //gain 控制步长：避免一次跳动过大
-  pose_x += gain_ * (pose[0] - pose_x);
-  pose_y += gain_ * (pose[1] - pose_y);
-  pose_yaw += gain_ * (pose[2] - pose_yaw);
+  // pose_x += gain_ * (pose[0] - pose_x);
+  // pose_y += gain_ * (pose[1] - pose_y);
+  // pose_yaw += gain_ * (pose[2] - pose_yaw);
 }
 
 // 多层地图求解
@@ -143,6 +148,7 @@ void CeresScanMatcher::solve(
 
   ceres::Solver::Summary summary;
   ceres::Solve(options, &problem, &summary);
+  std::cout << "CeresScanMatcher Summary: " << summary.FullReport() << std::endl;
   r_norm = std::sqrt(summary.final_cost / points.size());// 计算均方根误差
   pose_x += gain_ * (pose[0] - pose_x);
   pose_y += gain_ * (pose[1] - pose_y);

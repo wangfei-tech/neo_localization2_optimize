@@ -108,3 +108,6 @@ neo_localization2_node:
     # 是否广播地图框架tf 发布
     broadcast_tf: true
 
+    #优化器的选用
+    use_ceres: true
+

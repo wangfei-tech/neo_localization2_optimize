@@ -30,20 +30,6 @@ SOFTWARE.
 
 #include <vector>
 
-
-struct scan_point_t
-{
-  float x = 0;    // [m]
-  float y = 0;    // [m]
-};
-
-struct scan_point_ex_t : public scan_point_t
-{
-  float w = 1;    // weight [1]
-  int layer = 0;    // layer index
-};
-
-
 class Solver {
 public:
   double pose_x = 0;          // initial guess / output grid pose
@@ -53,6 +39,7 @@ public:
   double gain = 0.1;          // how fast to converge (0 to 1)
   double damping = 1;         // numerical hessian damping
   double r_norm = 0;          // current error norm
+  double r_sum = 0;          // current error norm
 
   Matrix<double, 3, 1> G;       // gradient vector
   Matrix<double, 3, 3> H;       // Hessian matrix
@@ -67,7 +54,7 @@ public:
     // compute transformation matrix first
     // 激光雷达坐标系到栅格地图坐标系的变换矩阵
     const Matrix<double, 3, 3> P = transform2(pose_x, pose_y, pose_yaw);
-
+    r_sum = 0.0;
     for(const auto& point : points)
     {
       // transform sensor point to grid coordinates
@@ -77,6 +64,7 @@ public:
 
       // compute error based on grid
       const float r_i = grid.bilinear_lookup(grid_x, grid_y); //对应点在栅格地图上的误差 双线性插值
+      r_sum +=r_i;
       r_norm += r_i * r_i;
 
       // compute error gradient based on grid
@@ -85,7 +73,7 @@ public:
 
       integrate(point.x, point.y, r_i, dx, dy);
     }
-
+    std::cout<<"Total r_sum: "<<r_sum<<std::endl;
     // we want average r_norm
     r_norm = sqrt(r_norm / points.size());
 

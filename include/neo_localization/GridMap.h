@@ -30,11 +30,28 @@ SOFTWARE.
 #include <stdexcept>
 #include <memory>
 #include <vector>
-
+#include <ceres/jet.h>
 
 /*
  * Class for a rectangular grid map.
  */
+
+struct scan_point_t {
+  float x = 0;
+  float y = 0;
+};
+
+struct scan_point_ex_t : public scan_point_t {
+  float w = 1.0;
+  int layer = 0;
+};
+
+template <typename Scalar>
+inline Scalar getScalar(const Scalar& x) { return x; }
+
+template <typename Scalar, int N>
+inline Scalar getScalar(const ceres::Jet<Scalar, N>& x) { return x.a; }
+
 template<typename T>
 class GridMap {
 public:
@@ -142,7 +159,12 @@ public:
   float world_to_grid(float meters) const {
     return meters * m_inv_scale - 0.5f;
   }
-
+  // for ceres
+  template <typename U>
+  U world_to_grid_T(const U &meters) const
+  {
+    return meters * U(m_inv_scale) - U(0.5);
+  }
   /*
    * Bilinear interpolation at given pixel position.
    * A coordinate of (0, 0) gives the exact value of the first pixel.
@@ -154,7 +176,41 @@ public:
 
     return bilinear_lookup_ex(x, y, a, b);
   }
+  /// @brief Bilinear interpolation at given pixel position.
+  /// @tparam T 
+  /// @param x 
+  /// @param y 
+  /// @return
+  template <typename U>
+  U bilinear_lookup_T(const U &x, const U &y) const
+  {
+    U fx = ceres::floor(x);
+    U fy = ceres::floor(y);
 
+    int x0 = static_cast<int>(getScalar(fx));
+    int y0 = static_cast<int>(getScalar(fy));
+
+    // int x0 = static_cast<int>(ceres::JetOps<T>::GetScalar(fx));
+    // int y0 = static_cast<int>(ceres::JetOps<T>::GetScalar(fy));
+
+    int x0_clamped = std::max(0, std::min(x0, m_size_x - 2));
+    int x1 = x0_clamped + 1;
+    int y0_clamped = std::max(0, std::min(y0, m_size_y - 2));
+    int y1 = y0_clamped + 1;
+
+    U a = x - U(x0_clamped);
+    U b = y - U(y0_clamped);
+
+    U v00 = U(m_map[y0_clamped * m_size_x + x0_clamped]);
+    U v10 = U(m_map[y0_clamped * m_size_x + x1]);
+    U v01 = U(m_map[y1 * m_size_x + x0_clamped]);
+    U v11 = U(m_map[y1 * m_size_x + x1]);
+
+    return (v00 * (U(1.0) - a) * (U(1.0) - b)) +
+           (v10 * a * (U(1.0) - b)) +
+           (v01 * (U(1.0) - a) * b) +
+           (v11 * a * b);
+  }
   /*
    * Same as bilinear_lookup() but with pre-computed offsets a and b.
    */

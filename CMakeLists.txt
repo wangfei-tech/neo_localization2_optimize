@@ -13,6 +13,7 @@ find_package(ament_cmake REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(angles REQUIRED)
 find_package(Ceres REQUIRED)
+find_package(OpenMP REQUIRED)#cpu并行加速
 
 
 set(CMAKE_CXX_STANDARD 17)
@@ -51,6 +52,7 @@ add_executable(${library_name} src/neo_localization_node.cpp
 ament_target_dependencies(${library_name}
   ${dependencies}
   Ceres
+  OpenMP
 )
 target_link_libraries(${library_name}
   ${CERES_LIBRARIES}

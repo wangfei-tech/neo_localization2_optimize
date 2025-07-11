@@ -39,6 +39,10 @@ using namespace std::chrono_literals;
 #include <cmath>
 #include <array>
 #include <tf2_ros/create_timer_ros.h>
+
+#include "neo_localization/ceres_solver.h"
+#include <omp.h>
+
 using std::placeholders::_1;
 using std::placeholders::_2;
 
@@ -156,6 +160,9 @@ public:
 
     this->declare_parameter<std::string>("amcl_pose", "amcl_pose");
     this->get_parameter("amcl_pose", m_amcl_pose);
+
+    this->declare_parameter<bool>("use_ceres", false);
+    this->get_parameter("use_ceres", use_ceres);
 
     this->declare_parameter<bool>("broadcast_info", false);
     this->get_parameter("broadcast_info", m_broadcast_info);
@@ -317,71 +324,128 @@ protected:
     pose_array.header.frame_id = m_map_frame;
 
     // calc predicted grid pose based on odometry
-
+    // 预测初始位姿
     const Matrix<double, 3, 1> grid_pose = (m_grid_to_map.inverse() * T * L * Matrix<double, 4, 1>{0, 0, 0, 1}).project();
     // setup distributions
     std::normal_distribution<double> dist_x(grid_pose[0], m_sample_std_xy);//m_sample_std_xy 高斯分布的标准差
     std::normal_distribution<double> dist_y(grid_pose[1], m_sample_std_xy);
     std::normal_distribution<double> dist_yaw(grid_pose[2], m_sample_std_yaw);
-
-    // solve odometry prediction first 里程计预测
-    m_solver.pose_x = grid_pose[0];
-    m_solver.pose_y = grid_pose[1];
-    m_solver.pose_yaw = grid_pose[2];
-
-    for(int iter = 0; iter < m_solver_iterations; ++iter) {
-      m_solver.solve<float>(*m_map, points);
-    }
-
-    double best_x = m_solver.pose_x;
-    double best_y = m_solver.pose_y;
-    double best_yaw = m_solver.pose_yaw;
-    double best_score = m_solver.r_norm;
-
     std::vector<Matrix<double, 3, 1>> seeds(m_sample_rate);
     std::vector<Matrix<double, 3, 1>> samples(m_sample_rate);
     std::vector<double> sample_errors(m_sample_rate);
 
-    for(int i = 0; i < m_sample_rate; ++i)
+    if (use_ceres)
     {
-      // generate new sample
-      m_solver.pose_x = dist_x(m_generator);
-      m_solver.pose_y = dist_y(m_generator);
-      m_solver.pose_yaw = dist_yaw(m_generator);
+      //**********************ceres solver************************
+      best_x = grid_pose[0];
+      best_y = grid_pose[1];
+      best_yaw = grid_pose[2];
+      best_score = std::numeric_limits<double>::max(); // 最小残差为优
+      // 先用里程计预测做一次优化
+      double pose[3] = {best_x, best_y, best_yaw};
+      ceres_solver.gain_ = m_solver.gain;
+      ceres_solver.damping_ = m_solver.damping;
+      ceres_solver.solve(m_map, points, pose[0], pose[1], pose[2]);
+      for (int i = 0; i < m_sample_rate; ++i)
+      {
+        double pose[3];
+        pose[0] = dist_x(m_generator);
+        pose[1] = dist_y(m_generator);
+        pose[2] = dist_yaw(m_generator);
+        seeds[i] = Matrix<double, 3, 1>{pose[0], pose[1], pose[2]};
+        ceres_solver.solve(m_map, points, pose[0], pose[1], pose[2]);
 
-      seeds[i] = Matrix<double, 3, 1>{m_solver.pose_x, m_solver.pose_y, m_solver.pose_yaw};
+        samples[i] = Matrix<double, 3, 1>{pose[0], pose[1], pose[2]};
+        sample_errors[i] = ceres_solver.r_norm;
+        if (ceres_solver.r_norm < best_score)
+        {
+          best_x = pose[0];
+          best_y = pose[1];
+          best_yaw = pose[2];
+          best_score = ceres_solver.r_norm;
+          RCLCPP_WARN_STREAM(this->get_logger(), "After ceresSolver:  pose[0]: " << pose[0] << " pose[1]: " << pose[1] << " pose[2]: " << pose[2]);
+          RCLCPP_WARN_STREAM(this->get_logger(), "CeresSolver: r_norm = " << ceres_solver.r_norm);
+        }
+        // add to visualization
+        {
+          const Matrix<double, 3, 1> map_pose = (m_grid_to_map * seeds[i].extend()).project();
+          tf2::Quaternion tmp;
+          geometry_msgs::msg::Pose pose;
+          pose.position.x = map_pose[0];
+          pose.position.y = map_pose[1];
+          tmp.setRPY(0, 0, map_pose[2]);
+          auto tmp_msg = tf2::toMsg(tmp);
+          pose.orientation = tmp_msg;
+          pose_array.poses.push_back(pose);
+        }
+      }
+    }
+    //**********************************************************
 
-      // solve sample
-      for(int iter = 0; iter < m_solver_iterations; ++iter) {
+    else
+    {
+      //************************手写优化************************
+      // solve odometry prediction first 里程计预测
+      m_solver.pose_x = grid_pose[0];
+      m_solver.pose_y = grid_pose[1];
+      m_solver.pose_yaw = grid_pose[2];
+
+      for (int iter = 0; iter < m_solver_iterations; ++iter)
+      {
         m_solver.solve<float>(*m_map, points);
       }
 
-      // save sample
-      const auto sample = Matrix<double, 3, 1>{m_solver.pose_x, m_solver.pose_y, m_solver.pose_yaw};
-      samples[i] = sample;
-      sample_errors[i] = m_solver.r_norm;
+      best_x = m_solver.pose_x;
+      best_y = m_solver.pose_y;
+      best_yaw = m_solver.pose_yaw;
+      best_score = m_solver.r_norm;
 
-      // check if sample is better
-      if(m_solver.r_norm > best_score) {
-        best_x = m_solver.pose_x;
-        best_y = m_solver.pose_y;
-        best_yaw = m_solver.pose_yaw;
-        best_score = m_solver.r_norm;
-      }
-
-      // add to visualization
+      for (int i = 0; i < m_sample_rate; ++i)
       {
-        const Matrix<double, 3, 1> map_pose = (m_grid_to_map * sample.extend()).project();
-        tf2::Quaternion tmp;
-        geometry_msgs::msg::Pose pose;
-        pose.position.x = map_pose[0];
-        pose.position.y = map_pose[1];
-        tmp.setRPY( 0, 0, map_pose[2]);
-        auto tmp_msg = tf2::toMsg(tmp);
-        pose.orientation = tmp_msg;
-        pose_array.poses.push_back(pose);
+        // generate new sample
+        m_solver.pose_x = dist_x(m_generator);
+        m_solver.pose_y = dist_y(m_generator);
+        m_solver.pose_yaw = dist_yaw(m_generator);
+
+        seeds[i] = Matrix<double, 3, 1>{m_solver.pose_x, m_solver.pose_y, m_solver.pose_yaw};
+
+        // solve sample
+        for (int iter = 0; iter < m_solver_iterations; ++iter)
+        {
+          m_solver.solve<float>(*m_map, points);
+        }
+
+        // save sample
+        const auto sample = Matrix<double, 3, 1>{m_solver.pose_x, m_solver.pose_y, m_solver.pose_yaw};
+        samples[i] = sample;
+        sample_errors[i] = m_solver.r_norm;
+
+        // check if sample is better
+        if (m_solver.r_norm > best_score)
+        {
+          best_x = m_solver.pose_x;
+          best_y = m_solver.pose_y;
+          best_yaw = m_solver.pose_yaw;
+          best_score = m_solver.r_norm;
+          RCLCPP_WARN_STREAM(this->get_logger(), "NeoLocalizationNode: New best sample found: x=" << best_x << ", y=" << best_y << ", yaw=" << best_yaw);
+          RCLCPP_WARN_STREAM(this->get_logger(), "NeoLocalizationNode: r_norm = " << m_solver.r_norm);
+        }
+
+        // add to visualization
+        {
+          const Matrix<double, 3, 1> map_pose = (m_grid_to_map * sample.extend()).project();
+          tf2::Quaternion tmp;
+          geometry_msgs::msg::Pose pose;
+          pose.position.x = map_pose[0];
+          pose.position.y = map_pose[1];
+          tmp.setRPY(0, 0, map_pose[2]);
+          auto tmp_msg = tf2::toMsg(tmp);
+          pose.orientation = tmp_msg;
+          pose_array.poses.push_back(pose);
+        }
       }
     }
+    //**********************************************************
 
     // compute covariances
     double mean_score = 0;
@@ -394,18 +458,25 @@ protected:
 
     // compute gradient characteristic
     std::array<Matrix<double, 2, 1>, 2> grad_eigen_vectors;
-    const Matrix<double, 2, 1> grad_eigen_values = compute_eigenvectors_2(grad_var_xyw.get<2, 2>(), grad_eigen_vectors);//计算协方差矩阵的特征值和特征向量
+    const Matrix<double, 2, 1> grad_eigen_values = compute_eigenvectors_2(grad_var_xyw.get<2, 2>(), grad_eigen_vectors); // 计算协方差矩阵的特征值和特征向量
     const Matrix<double, 3, 1> grad_std_uvw{sqrt(grad_eigen_values[0]), sqrt(grad_eigen_values[1]), sqrt(grad_var_xyw(2, 2))};
 
     // decide if we have 3D, 2D, 1D or 0D localization
     int mode = 0;
-    if(best_score > m_min_score) {
-      if(grad_std_uvw[0] > m_constrain_threshold) {
-        if(grad_std_uvw[1] > m_constrain_threshold) {
+    if (best_score > m_min_score)
+    {
+      if (grad_std_uvw[0] > m_constrain_threshold)
+      {
+        if (grad_std_uvw[1] > m_constrain_threshold)
+        {
           mode = 3; // 2D position + rotation
-        } else if(grad_std_uvw[2] > m_constrain_threshold_yaw) {
+        }
+        else if (grad_std_uvw[2] > m_constrain_threshold_yaw)
+        {
           mode = 2; // 1D position + rotation
-        } else {
+        }
+        else
+        {
           mode = 1; // 1D position only
         }
       }
@@ -502,7 +573,7 @@ protected:
 
     // clear scan buffer
     m_scan_buffer.clear();
-  }
+    }
 
   /*
    * Resets localization to given position.
@@ -769,7 +840,11 @@ private:
   int m_loc_update_time_ms = 0;
   double m_map_update_rate = 0;
   double m_transform_timeout = 0;
-
+  bool use_ceres = false; // use CeresScanMatcher instead of Solver
+  double best_x;
+  double best_y;
+  double best_yaw;
+  double best_score;
   builtin_interfaces::msg::Time m_offset_time;
   double m_offset_x = 0;          // current x offset between odom and map
   double m_offset_y = 0;          // current y offset between odom and map
@@ -790,6 +865,7 @@ private:
   std::map<std::string, sensor_msgs::msg::LaserScan::SharedPtr> m_scan_buffer;
 
   Solver m_solver;
+  CeresScanMatcher ceres_solver;
   std::mt19937 m_generator;
   std::thread m_map_update_thread;
   bool m_broadcast_info;
