@@ -109,5 +109,6 @@ neo_localization2_node:
     broadcast_tf: true
 
     #优化器的选用
+    # use_ceres: false
     use_ceres: true
 

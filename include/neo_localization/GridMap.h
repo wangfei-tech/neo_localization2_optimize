@@ -192,7 +192,10 @@ public:
 
     // int x0 = static_cast<int>(ceres::JetOps<T>::GetScalar(fx));
     // int y0 = static_cast<int>(ceres::JetOps<T>::GetScalar(fy));
-
+    if (x0 < 0 || y0 < 0 || x0 >= m_size_x - 1 || y0 >= m_size_y - 1)
+    {
+      return U(0.0); // 或 U(m_default_value)
+    }
     int x0_clamped = std::max(0, std::min(x0, m_size_x - 2));
     int x1 = x0_clamped + 1;
     int y0_clamped = std::max(0, std::min(y0, m_size_y - 2));

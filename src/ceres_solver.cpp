@@ -102,6 +102,7 @@ void CeresScanMatcher::solve(
 {
   double pose[3] = { pose_x, pose_y, pose_yaw };
   ceres::Problem problem;
+  ceres::LossFunction* loss = new ceres::HuberLoss(0.1);  // 抑制离群点
   auto map_val_sum = std::make_shared<double>(0.0);
 
   for (const auto& pt : points) 
@@ -111,17 +112,18 @@ void CeresScanMatcher::solve(
     problem.AddResidualBlock(cost_function, nullptr, pose);
   }
   ceres::Solver::Options options;
-  options.max_num_iterations = 20;
-  options.linear_solver_type = ceres::DENSE_QR;
+  options.max_num_iterations = 100;
+  options.linear_solver_type = ceres::SPARSE_NORMAL_CHOLESKY; // 稀疏矩阵求解器
   options.minimizer_progress_to_stdout = false;
 
   ceres::Solver::Summary summary;
   ceres::Solve(options, &problem, &summary);
-  std::cout<< "CeresScanMatcher Summary: " << summary.FullReport() << std::endl;
+  // std::cout<< "CeresScanMatcher Summary: " << summary.FullReport() << std::endl;
+  r_norm = std::sqrt(summary.final_cost / points.size());// 计算均方根误差
   //gain 控制步长：避免一次跳动过大
-  // pose_x += gain_ * (pose[0] - pose_x);
-  // pose_y += gain_ * (pose[1] - pose_y);
-  // pose_yaw += gain_ * (pose[2] - pose_yaw);
+  pose_x += gain_ * (pose[0] - pose_x);
+  pose_y += gain_ * (pose[1] - pose_y);
+  pose_yaw += gain_ * (pose[2] - pose_yaw);
 }
 
 // 多层地图求解

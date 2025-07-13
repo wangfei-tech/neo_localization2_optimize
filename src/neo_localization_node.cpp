@@ -357,7 +357,7 @@ protected:
 
         samples[i] = Matrix<double, 3, 1>{pose[0], pose[1], pose[2]};
         sample_errors[i] = ceres_solver.r_norm;
-        if (ceres_solver.r_norm < best_score)
+        if (ceres_solver.r_norm < 0.05 )
         {
           best_x = pose[0];
           best_y = pose[1];
@@ -463,22 +463,50 @@ protected:
 
     // decide if we have 3D, 2D, 1D or 0D localization
     int mode = 0;
-    if (best_score > m_min_score)
+    if(use_ceres)
     {
-      if (grad_std_uvw[0] > m_constrain_threshold)
+      if (best_score < 0.05)
       {
-        if (grad_std_uvw[1] > m_constrain_threshold)
+        if (grad_std_uvw[0] > m_constrain_threshold)
         {
-          mode = 3; // 2D position + rotation
+          if (grad_std_uvw[1] > m_constrain_threshold)
+          {
+            mode = 3; // 2D position + rotation
+          }
+          else if (grad_std_uvw[2] > m_constrain_threshold_yaw)
+          {
+            mode = 2; // 1D position + rotation
+          }
+          else
+          {
+            mode = 1; // 1D position only
+          }
         }
-        else if (grad_std_uvw[2] > m_constrain_threshold_yaw)
+        RCLCPP_INFO(this->get_logger(), "NeoLocalizationNode: mode=%dD, score=%.3f, grad_uvw=[%.3f, %.3f, %.3f], std_xy=%.3f m, std_yaw=%.3f rad",
+                    mode, best_score, grad_std_uvw[0], grad_std_uvw[1], grad_std_uvw[2], m_sample_std_xy, m_sample_std_yaw);
+      }
+    }
+    else
+    {
+      if (best_score > m_min_score)
+      {
+        if (grad_std_uvw[0] > m_constrain_threshold)
         {
-          mode = 2; // 1D position + rotation
+          if (grad_std_uvw[1] > m_constrain_threshold)
+          {
+            mode = 3; // 2D position + rotation
+          }
+          else if (grad_std_uvw[2] > m_constrain_threshold_yaw)
+          {
+            mode = 2; // 1D position + rotation
+          }
+          else
+          {
+            mode = 1; // 1D position only
+          }
         }
-        else
-        {
-          mode = 1; // 1D position only
-        }
+        RCLCPP_INFO(this->get_logger(), "NeoLocalizationNode: mode=%dD, score=%.3f, grad_uvw=[%.3f, %.3f, %.3f], std_xy=%.3f m, std_yaw=%.3f rad",
+          mode, best_score, grad_std_uvw[0], grad_std_uvw[1], grad_std_uvw[2], m_sample_std_xy, m_sample_std_yaw);
       }
     }
 

@@ -73,7 +73,7 @@ public:
 
       integrate(point.x, point.y, r_i, dx, dy);
     }
-    std::cout<<"Total r_sum: "<<r_sum<<std::endl;
+    // std::cout<<"Total r_sum: "<<r_sum<<std::endl;
     // we want average r_norm
     r_norm = sqrt(r_norm / points.size());
 
